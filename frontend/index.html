@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mental Health Screening Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Persistent Disclaimer -->
+        <div class="disclaimer-banner">
+            <p><strong>Important:</strong> This is not a diagnostic tool. For professional mental health support, please consult a qualified healthcare provider.</p>
+        </div>
+
+        <!-- Main Interface -->
+        <div class="main-interface">
+            <!-- Avatar Container -->
+            <div class="avatar-container">
+                <video id="avatar-video" autoplay loop muted>
+                    <source src="assets/animations/idle.mp4" type="video/mp4">
+                    Your browser does not support video playback.
+                </video>
+                <div class="avatar-status" id="avatar-status">Ready to listen</div>
+            </div>
+
+            <!-- Conversation Display -->
+            <div class="conversation-container">
+                <div class="conversation-history" id="conversation-history">
+                    <div class="system-message">
+                        <p>Hello! I'm here to help you with a brief mental health screening. This conversation is private and will not be stored.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls-container">
+                <button id="mic-button" class="mic-button" disabled>
+                    <span class="mic-icon">🎤</span>
+                    <span class="mic-text">Requesting microphone access...</span>
+                </button>
+                <button id="text-input-toggle" class="text-toggle" style="display: none;">
+                    Use text instead
+                </button>
+            </div>
+
+            <!-- Text Input Fallback -->
+            <div class="text-input-container" id="text-input-container" style="display: none;">
+                <input type="text" id="text-input" placeholder="Type your response here..." />
+                <button id="send-text-button">Send</button>
+            </div>
+        </div>
+
+        <!-- Browser Compatibility Warning -->
+        <div class="compatibility-warning" id="compatibility-warning" style="display: none;">
+            <p>⚠️ Your browser may not fully support voice features. Text input is available as an alternative.</p>
+        </div>
+
+        <!-- Crisis Resources Modal -->
+        <div class="crisis-modal" id="crisis-modal" style="display: none;">
+            <div class="crisis-content">
+                <h2>🚨 Immediate Support Available</h2>
+                <p>If you're having thoughts of suicide or self-harm, please reach out for help immediately:</p>
+                <div class="crisis-contacts">
+                    <div class="helpline">
+                        <strong>Crisis Helpline:</strong> <a href="tel:988">988</a>
+                    </div>
+                    <div class="emergency">
+                        <strong>Emergency Services:</strong> <a href="tel:911">911</a>
+                    </div>
+                </div>
+                <p>You are not alone. Professional help is available 24/7.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="js/voice-engine.js"></script>
+    <script src="js/avatar.js"></script>
+    <script src="js/safety-monitor.js"></script>
+    <script src="js/state-machine.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
