@@ -10,6 +10,7 @@ class MentalHealthApp {
         this.safetyMonitor = null;
         this.stateMachine = null;
         this.sessionId = null;
+        this.userName = ""; // NEW: Store user name
         
         // DOM elements
         this.micButton = document.getElementById('mic-button');
@@ -54,6 +55,15 @@ class MentalHealthApp {
             this.enableTextFallback();
         }
     }
+
+    /**
+     * NEW: Set the user's name for personalization
+     * Called from index.html login logic
+     */
+    setUserName(name) {
+        this.userName = name;
+        console.log(`User name set to: ${name}`);
+    }
     
     /**
      * Check browser compatibility and show warnings if needed
@@ -93,7 +103,8 @@ class MentalHealthApp {
             this.enableMicrophoneButton();
         } catch (error) {
             console.error('Microphone permission denied:', error);
-            this.micButton.textContent = 'Microphone access denied';
+            // Don't show text on button, handle via disabled state/icon
+            this.micButton.disabled = true;
             this.enableTextFallback();
         }
     }
@@ -103,7 +114,7 @@ class MentalHealthApp {
      */
     enableMicrophoneButton() {
         this.micButton.disabled = false;
-        this.micButton.innerHTML = '<span class="mic-icon">🎤</span><span class="mic-text">Click to speak</span>';
+        // Icon is already set in HTML
     }
     
     /**
@@ -111,7 +122,7 @@ class MentalHealthApp {
      */
     enableTextFallback() {
         this.textInputContainer.style.display = 'flex';
-        this.textInputToggle.textContent = 'Voice not available - using text';
+        this.textInputToggle.textContent = 'Voice unavailable - typing enabled';
         this.textInputToggle.disabled = true;
     }
     
@@ -121,13 +132,11 @@ class MentalHealthApp {
     setupVoiceEngineHandlers() {
         this.voiceEngine.onListeningStart = () => {
             this.micButton.classList.add('listening');
-            this.micButton.innerHTML = '<span class="mic-icon">🎤</span><span class="mic-text">Listening...</span>';
             this.avatar.setState('LISTENING');
         };
         
         this.voiceEngine.onListeningEnd = () => {
             this.micButton.classList.remove('listening');
-            this.micButton.innerHTML = '<span class="mic-icon">🎤</span><span class="mic-text">Click to speak</span>';
             this.avatar.setState('THINKING');
         };
         
@@ -167,7 +176,7 @@ class MentalHealthApp {
         this.textInputToggle.addEventListener('click', () => {
             const isVisible = this.textInputContainer.style.display === 'flex';
             this.textInputContainer.style.display = isVisible ? 'none' : 'flex';
-            this.textInputToggle.textContent = isVisible ? 'Use text instead' : 'Hide text input';
+            this.textInputToggle.textContent = isVisible ? 'Prefer to type?' : 'Hide text input';
             
             if (!isVisible) {
                 this.textInput.focus();
@@ -250,8 +259,10 @@ class MentalHealthApp {
      * Process user message (placeholder - will integrate with backend)
      */
     async processUserMessage(userText) {
-        // Placeholder response - will be replaced with actual API call
-        return "Thank you for sharing that with me. I'm here to help you with a mental health screening. This is just a placeholder response while we set up the system.";
+        // Here you would typically make an API call to your Python backend
+        // For now, returning a static response that uses the name if available
+        const prefix = this.userName ? `${this.userName}, ` : "";
+        return `${prefix}Thank you for sharing that with me. I'm here to help you with a mental health screening. This is just a placeholder response while we set up the system.`;
     }
     
     /**
