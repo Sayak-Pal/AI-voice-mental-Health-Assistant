@@ -1,306 +1,319 @@
-/**
- * Main Application Controller
- * Initializes and coordinates all components of the Mental Health Screening Assistant
- */
-
 class MentalHealthApp {
     constructor() {
         this.voiceEngine = null;
         this.avatar = null;
         this.safetyMonitor = null;
         this.stateMachine = null;
-        this.sessionId = null;
-        this.userName = ""; // NEW: Store user name
+        this.userName = "";
         
-        // DOM elements
+        // Element References
         this.micButton = document.getElementById('mic-button');
         this.textInputToggle = document.getElementById('text-input-toggle');
         this.textInputContainer = document.getElementById('text-input-container');
         this.textInput = document.getElementById('text-input');
         this.sendTextButton = document.getElementById('send-text-button');
-        this.compatibilityWarning = document.getElementById('compatibility-warning');
         this.conversationHistory = document.getElementById('conversation-history');
         
+        // --- NEW VARIABLES ---
+        this.chartInstance = null;
+        this.chartUpdateInterval = null; // For simulated live data
+        this.quotes = [
+            "Your mental health is a priority. Your happiness is an essential.",
+            "You don’t have to control your thoughts. You just have to stop letting them control you.",
+            "There is hope, even when your brain tells you there isn’t.",
+            "It is okay to have bad days.",
+            "Healing is not linear. Be patient with yourself.",
+            "You are strong for getting out of bed today.",
+            "Breathe. It’s just a bad day, not a bad life.",
+            "You are enough just as you are.",
+            "Every day may not be good, but there is something good in every day.",
+            "Small steps in the right direction can turn out to be the biggest step of your life.",
+            "Recovery is a process. It takes time. It takes patience.",
+            "You are allowed to feel messed up and inside out. It doesn't mean you're defective.",
+            "Don't believe everything you think.",
+            "You are capable of amazing things.",
+            "This too shall pass.",
+            "Your feelings are valid.",
+            "Talk to yourself like you would to someone you love.",
+            "Progress is progress, no matter how small.",
+            "You are not a burden.",
+            "The sun will rise and we will try again."
+        ];
+
         this.initialize();
     }
     
-    /**
-     * Initialize the application
-     */
     async initialize() {
         try {
-            // Initialize voice engine
             this.voiceEngine = new VoiceEngine();
             this.setupVoiceEngineHandlers();
-            
-            // Initialize other components
             this.avatar = new AvatarComponent();
             this.safetyMonitor = new SafetyMonitor();
             this.stateMachine = new StateMachine();
             
-            // Check browser compatibility
             this.checkCompatibility();
-            
-            // Set up event listeners
             this.setupEventListeners();
             
-            // Request microphone permission and enable controls
-            await this.requestMicrophonePermission();
-            
-            console.log('Mental Health Screening Assistant initialized successfully');
-            
+            console.log('App initialized');
         } catch (error) {
-            console.error('Failed to initialize application:', error);
-            this.showCompatibilityWarning();
             this.enableTextFallback();
         }
     }
 
-    /**
-     * NEW: Set the user's name for personalization
-     * Called from index.html login logic
-     */
-    setUserName(name) {
-        this.userName = name;
-        console.log(`User name set to: ${name}`);
+    setUserName(name) { this.userName = name; }
+    
+    setAssistantGender(gender) {
+        if (this.avatar) this.avatar.setGender(gender);
+        if (this.voiceEngine) this.voiceEngine.setVoiceByGender(gender);
     }
     
-    /**
-     * Check browser compatibility and show warnings if needed
-     */
     checkCompatibility() {
-        const support = this.voiceEngine.isSupported;
-        
-        if (!support.full) {
-            this.showCompatibilityWarning();
-            
-            if (!support.recognition) {
-                console.warn('Speech recognition not supported');
-            }
-            
-            if (!support.synthesis) {
-                console.warn('Speech synthesis not supported');
-            }
-        }
-        
-        // Always show text input toggle as fallback
-        this.textInputToggle.style.display = 'block';
-    }
-    
-    /**
-     * Show browser compatibility warning
-     */
-    showCompatibilityWarning() {
-        this.compatibilityWarning.style.display = 'block';
-    }
-    
-    /**
-     * Request microphone permission
-     */
-    async requestMicrophonePermission() {
-        try {
-            await navigator.mediaDevices.getUserMedia({ audio: true });
-            this.enableMicrophoneButton();
-        } catch (error) {
-            console.error('Microphone permission denied:', error);
-            // Don't show text on button, handle via disabled state/icon
+        if (this.voiceEngine.isSupported.full) {
+            this.micButton.disabled = false;
+        } else {
             this.micButton.disabled = true;
+            this.showToast('Browser features limited. Use Chrome.', 'error');
             this.enableTextFallback();
         }
     }
     
-    /**
-     * Enable microphone button
-     */
-    enableMicrophoneButton() {
-        this.micButton.disabled = false;
-        // Icon is already set in HTML
-    }
-    
-    /**
-     * Enable text input fallback
-     */
     enableTextFallback() {
         this.textInputContainer.style.display = 'flex';
-        this.textInputToggle.textContent = 'Voice unavailable - typing enabled';
-        this.textInputToggle.disabled = true;
+        this.textInputToggle.style.display = 'none';
+    }
+
+    // --- NAVIGATION LOGIC ---
+    navigateTo(viewId) {
+        // Hide all views
+        document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
+        
+        const target = document.getElementById(viewId);
+        if(target) target.style.display = viewId === 'chat-view' ? 'block' : 'flex';
+
+        // Toggle Main Nav: Hide it when in stats view (use Back Arrow instead)
+        const mainNav = document.getElementById('main-nav');
+        if(mainNav) {
+            if(viewId === 'stats-view') {
+                mainNav.style.display = 'none';
+                this.initStatsView();
+            } else {
+                mainNav.style.display = 'flex';
+                this.stopChartSimulation();
+            }
+        }
+    }
+
+    // --- DAILY QUOTE LOGIC ---
+    getDailyQuote() {
+        const today = new Date();
+        const dateSeed = today.getFullYear() * 1000 + (today.getMonth() + 1) * 100 + today.getDate();
+        const quoteIndex = dateSeed % this.quotes.length;
+        return this.quotes[quoteIndex];
+    }
+
+    // --- STATS VIEW INIT ---
+    initStatsView() {
+        const display = document.getElementById('quote-display');
+        if(display) {
+            display.style.opacity = 0;
+            setTimeout(() => {
+                display.innerText = `"${this.getDailyQuote()}"`;
+                display.style.opacity = 1;
+            }, 300);
+        }
+        this.renderChart();
+    }
+
+    nextQuote() {
+        const display = document.getElementById('quote-display');
+        const randomQuote = this.quotes[Math.floor(Math.random() * this.quotes.length)];
+        display.style.opacity = 0;
+        setTimeout(() => { display.innerText = `"${randomQuote}"`; display.style.opacity = 1; }, 300);
+    }
+
+    // --- REAL-TIME CHART ---
+    renderChart() {
+        const ctx = document.getElementById('mentalHealthChart');
+        if(!ctx) return;
+        
+        if (this.chartInstance) {
+            this.chartInstance.destroy();
+        }
+
+        const initialData = [31, 28, 10, 5, 2, 24];
+
+        this.chartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Anxiety', 'Depression', 'ADHD', 'Bipolar', 'Autism', 'Stress'],
+                datasets: [{
+                    label: 'Global %',
+                    data: initialData,
+                    backgroundColor: ['#0F766E', '#2DD4BF', '#FB7185', '#F472B6', '#A78BFA', '#94A3B8'],
+                    borderWidth: 0,
+                    hoverOffset: 15
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#475569', font: {family: 'Inter'} } },
+                    tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.raw.toFixed(1)}%` } }
+                },
+                animation: { duration: 1000, easing: 'easeOutQuart' }
+            }
+        });
+
+        this.startChartSimulation();
+    }
+
+    startChartSimulation() {
+        if (this.chartUpdateInterval) clearInterval(this.chartUpdateInterval);
+        this.chartUpdateInterval = setInterval(() => {
+            if (!this.chartInstance) return;
+            const currentData = this.chartInstance.data.datasets[0].data;
+            const newData = currentData.map(value => Math.max(0, value + (Math.random() - 0.5) * 2));
+            this.chartInstance.data.datasets[0].data = newData;
+            this.chartInstance.update(); 
+        }, 3000);
+    }
+
+    stopChartSimulation() {
+        if (this.chartUpdateInterval) {
+            clearInterval(this.chartUpdateInterval);
+            this.chartUpdateInterval = null;
+        }
     }
     
-    /**
-     * Set up voice engine event handlers
-     */
+    // --- EXISTING HANDLERS ---
     setupVoiceEngineHandlers() {
         this.voiceEngine.onListeningStart = () => {
             this.micButton.classList.add('listening');
             this.avatar.setState('LISTENING');
         };
-        
         this.voiceEngine.onListeningEnd = () => {
             this.micButton.classList.remove('listening');
+            this.micButton.classList.remove('user-speaking'); 
             this.avatar.setState('THINKING');
         };
-        
-        this.voiceEngine.onSpeechResult = (transcript, confidence) => {
-            this.handleUserInput(transcript);
-        };
-        
-        this.voiceEngine.onSpeechError = (error, message) => {
-            console.error('Speech recognition error:', error, message);
-            this.avatar.setState('IDLE');
-            this.addMessageToHistory('system', 'Sorry, I had trouble hearing you. Please try again or use text input.');
-        };
-        
-        this.voiceEngine.onSpeechStart = (text) => {
-            this.avatar.setState('SPEAKING');
-        };
-        
-        this.voiceEngine.onSpeechEnd = (text) => {
-            this.avatar.setState('IDLE');
-        };
+        this.voiceEngine.onSpeechResult = (transcript) => this.handleUserInput(transcript, 'speech');
+        this.voiceEngine.onSpeechStart = () => this.avatar.setState('SPEAKING');
+        this.voiceEngine.onSpeechEnd = () => this.avatar.setState('IDLE');
     }
     
-    /**
-     * Set up DOM event listeners
-     */
     setupEventListeners() {
-        // Microphone button
-        this.micButton.addEventListener('click', () => {
-            if (this.voiceEngine.isListening) {
-                this.voiceEngine.stopListening();
-            } else {
-                this.startListening();
-            }
+        this.micButton.addEventListener('click', async () => {
+            if (this.voiceEngine.isListening) { this.voiceEngine.stopListening(); return; }
+            await this.startListening();
         });
-        
-        // Text input toggle
         this.textInputToggle.addEventListener('click', () => {
             const isVisible = this.textInputContainer.style.display === 'flex';
             this.textInputContainer.style.display = isVisible ? 'none' : 'flex';
-            this.textInputToggle.textContent = isVisible ? 'Prefer to type?' : 'Hide text input';
-            
-            if (!isVisible) {
-                this.textInput.focus();
-            }
+            this.textInputToggle.textContent = isVisible ? 'Prefer to type?' : 'Hide input';
         });
-        
-        // Text input
         this.textInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.sendTextMessage();
-            }
+            if (e.key === 'Enter') this.sendTextMessage();
         });
-        
-        this.sendTextButton.addEventListener('click', () => {
-            this.sendTextMessage();
+        this.sendTextButton.addEventListener('click', () => this.sendTextMessage());
+        document.getElementById('theme-toggle').addEventListener('click', (e) => {
+            const body = document.body;
+            const isDark = body.getAttribute('data-theme') === 'dark';
+            body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            e.target.textContent = isDark ? '☀️' : '🌙';
+        });
+        document.getElementById('privacy-toggle').addEventListener('click', (e) => {
+            document.body.classList.toggle('privacy-mode');
+            e.target.textContent = document.body.classList.contains('privacy-mode') ? '🔒' : '👁️';
         });
     }
     
-    /**
-     * Start listening for voice input
-     */
     async startListening() {
         try {
-            await this.voiceEngine.startListening();
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.voiceEngine.connectAudioVisualizer(stream, (isSpeaking) => {
+                this.micButton.classList.toggle('user-speaking', isSpeaking);
+            });
+            await this.voiceEngine.startListening(); 
         } catch (error) {
-            console.error('Failed to start listening:', error);
-            this.addMessageToHistory('system', 'Unable to access microphone. Please use text input instead.');
-            this.enableTextFallback();
+            console.error(error);
+            this.showToast('Microphone access needed.', 'error');
         }
     }
     
-    /**
-     * Send text message
-     */
     sendTextMessage() {
         const text = this.textInput.value.trim();
         if (text) {
-            this.handleUserInput(text);
+            this.handleUserInput(text, 'text');
             this.textInput.value = '';
         }
     }
     
-    /**
-     * Handle user input (voice or text)
-     */
-    async handleUserInput(userText) {
-        // Add user message to conversation
+    async handleUserInput(userText, source = 'text') {
         this.addMessageToHistory('user', userText);
-        
-        // Check for crisis indicators
-        const crisisLevel = this.safetyMonitor.checkForCrisis(userText);
-        if (crisisLevel === 'CRITICAL') {
-            this.handleCrisisResponse();
+        if (this.safetyMonitor.checkForCrisis(userText) === 'CRITICAL') {
+            document.getElementById('crisis-modal').style.display = 'flex';
+            this.avatar.setState('IDLE');
             return;
         }
-        
-        // Set thinking state
         this.avatar.setState('THINKING');
-        
         try {
-            // Send to backend for processing (placeholder for now)
-            const response = await this.processUserMessage(userText);
-            
-            // Add system response to conversation
-            this.addMessageToHistory('system', response);
-            
-            // Speak the response if synthesis is supported
-            if (this.voiceEngine.isSupported.synthesis) {
-                await this.voiceEngine.speak(response);
-            }
-            
+            setTimeout(async () => {
+                const response = await this.processUserMessage(userText, source);
+                this.addMessageToHistory('system', response);
+                if (this.voiceEngine.isSupported.synthesis) {
+                    await this.voiceEngine.speak(response);
+                }
+            }, 1000);
         } catch (error) {
-            console.error('Error processing user message:', error);
-            this.addMessageToHistory('system', 'I apologize, but I encountered an error. Please try again.');
+            this.showToast('Error processing message', 'error');
             this.avatar.setState('IDLE');
         }
     }
     
-    /**
-     * Process user message (placeholder - will integrate with backend)
-     */
-    async processUserMessage(userText) {
-        // Here you would typically make an API call to your Python backend
-        // For now, returning a static response that uses the name if available
+    async processUserMessage(userText, source) {
         const prefix = this.userName ? `${this.userName}, ` : "";
-        return `${prefix}Thank you for sharing that with me. I'm here to help you with a mental health screening. This is just a placeholder response while we set up the system.`;
-    }
-    
-    /**
-     * Handle crisis response
-     */
-    handleCrisisResponse() {
-        const crisisModal = document.getElementById('crisis-modal');
-        crisisModal.style.display = 'flex';
-        
-        const crisisMessage = "I'm concerned about what you've shared. Please reach out for immediate support. You don't have to go through this alone.";
-        this.addMessageToHistory('system', crisisMessage);
-        
-        if (this.voiceEngine.isSupported.synthesis) {
-            this.voiceEngine.speak(crisisMessage);
+        if (source === 'speech') {
+            return `${prefix}I hear you. You said "${userText}". How does that make you feel?`;
+        } else {
+            return `${prefix}You wrote "${userText}". How does that make you feel?`;
         }
-        
-        this.avatar.setState('IDLE');
     }
     
-    /**
-     * Add message to conversation history
-     */
     addMessageToHistory(sender, message) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `${sender}-message`;
-        
-        const messageContent = document.createElement('p');
-        messageContent.textContent = message;
-        messageDiv.appendChild(messageContent);
-        
         this.conversationHistory.appendChild(messageDiv);
-        
-        // Scroll to bottom
+        if (sender === 'user') {
+            messageDiv.textContent = message;
+        } else {
+            let i = 0;
+            const typeWriter = () => {
+                if (i < message.length) {
+                    messageDiv.textContent += message.charAt(i);
+                    i++;
+                    this.conversationHistory.scrollTop = this.conversationHistory.scrollHeight;
+                    setTimeout(typeWriter, 30);
+                }
+            };
+            typeWriter();
+        }
         this.conversationHistory.scrollTop = this.conversationHistory.scrollHeight;
+    }
+
+    showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `<span>ℹ️</span> <span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
     }
 }
 
-// Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.mentalHealthApp = new MentalHealthApp();
 });
