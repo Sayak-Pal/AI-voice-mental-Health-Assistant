@@ -11,7 +11,7 @@ class Config:
     """Application configuration settings."""
     
     # API Configuration
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    # GEMINI_API_KEY removed
     
     # Server Configuration
     HOST: str = os.getenv("HOST", "0.0.0.0")
@@ -35,8 +35,7 @@ class Config:
     @classmethod
     def validate(cls) -> bool:
         """Validate that required configuration is present."""
-        if not cls.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is required but not set")
+        # Validation for GEMINI_API_KEY removed
         return True
 
 # Global configuration instance

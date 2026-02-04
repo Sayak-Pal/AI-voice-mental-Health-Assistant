@@ -50,7 +50,9 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 # Initialize safety monitoring and emergency resources
-safety_monitor = SafetyMonitor(config.CRISIS_TRIGGER_WORDS)
+# Initialize safety monitoring and emergency resources
+# SafetyMonitor now loads from botConfig.json by default
+safety_monitor = SafetyMonitor()
 crisis_handler = CrisisOverrideHandler(safety_monitor)
 emergency_manager = EmergencyResourceManager(config.EMERGENCY_RESOURCES_CONFIG_FILE)
 
@@ -170,6 +172,8 @@ async def process_conversation(request: ConversationRequest):
         
         # Check for errors
         if "error" in result:
+            with open("debug_error.log", "a") as f:
+                f.write(f"DEBUG ERROR: {result['error']}\n")
             raise HTTPException(status_code=400, detail=result["error"])
         
         return ConversationResponse(

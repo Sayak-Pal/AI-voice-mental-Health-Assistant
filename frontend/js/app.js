@@ -5,7 +5,9 @@ class MentalHealthApp {
         this.safetyMonitor = null;
         this.stateMachine = null;
         this.userName = "";
-        
+        this.sessionId = null;
+        this.apiBaseUrl = 'http://localhost:8000';
+
         // Element References
         this.micButton = document.getElementById('mic-button');
         this.textInputToggle = document.getElementById('text-input-toggle');
@@ -13,7 +15,7 @@ class MentalHealthApp {
         this.textInput = document.getElementById('text-input');
         this.sendTextButton = document.getElementById('send-text-button');
         this.conversationHistory = document.getElementById('conversation-history');
-        
+
         // --- NEW VARIABLES ---
         this.chartInstance = null;
         this.chartUpdateInterval = null; // For simulated live data
@@ -42,7 +44,7 @@ class MentalHealthApp {
 
         this.initialize();
     }
-    
+
     async initialize() {
         try {
             this.voiceEngine = new VoiceEngine();
@@ -50,23 +52,45 @@ class MentalHealthApp {
             this.avatar = new AvatarComponent();
             this.safetyMonitor = new SafetyMonitor();
             this.stateMachine = new StateMachine();
-            
+
             this.checkCompatibility();
             this.setupEventListeners();
-            
+
             console.log('App initialized');
         } catch (error) {
             this.enableTextFallback();
         }
     }
 
+    async startSession(userName) {
+        try {
+            this.setUserName(userName);
+            const response = await fetch(`${this.apiBaseUrl}/api/session/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_name: userName })
+            });
+
+            if (!response.ok) throw new Error('Network response was not ok');
+
+            const data = await response.json();
+            this.sessionId = data.session_id;
+            console.log('Session started:', this.sessionId);
+            return true;
+        } catch (error) {
+            console.error('Failed to start session:', error);
+            this.showToast('Could not connect to server. Is it running?', 'error');
+            return false;
+        }
+    }
+
     setUserName(name) { this.userName = name; }
-    
+
     setAssistantGender(gender) {
         if (this.avatar) this.avatar.setGender(gender);
         if (this.voiceEngine) this.voiceEngine.setVoiceByGender(gender);
     }
-    
+
     checkCompatibility() {
         if (this.voiceEngine.isSupported.full) {
             this.micButton.disabled = false;
@@ -76,7 +100,7 @@ class MentalHealthApp {
             this.enableTextFallback();
         }
     }
-    
+
     enableTextFallback() {
         this.textInputContainer.style.display = 'flex';
         this.textInputToggle.style.display = 'none';
@@ -86,14 +110,14 @@ class MentalHealthApp {
     navigateTo(viewId) {
         // Hide all views
         document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
-        
+
         const target = document.getElementById(viewId);
-        if(target) target.style.display = viewId === 'chat-view' ? 'block' : 'flex';
+        if (target) target.style.display = viewId === 'chat-view' ? 'block' : 'flex';
 
         // Toggle Main Nav: Hide it when in stats view (use Back Arrow instead)
         const mainNav = document.getElementById('main-nav');
-        if(mainNav) {
-            if(viewId === 'stats-view') {
+        if (mainNav) {
+            if (viewId === 'stats-view') {
                 mainNav.style.display = 'none';
                 this.initStatsView();
             } else {
@@ -114,7 +138,7 @@ class MentalHealthApp {
     // --- STATS VIEW INIT ---
     initStatsView() {
         const display = document.getElementById('quote-display');
-        if(display) {
+        if (display) {
             display.style.opacity = 0;
             setTimeout(() => {
                 display.innerText = `"${this.getDailyQuote()}"`;
@@ -134,8 +158,8 @@ class MentalHealthApp {
     // --- REAL-TIME CHART ---
     renderChart() {
         const ctx = document.getElementById('mentalHealthChart');
-        if(!ctx) return;
-        
+        if (!ctx) return;
+
         if (this.chartInstance) {
             this.chartInstance.destroy();
         }
@@ -158,7 +182,7 @@ class MentalHealthApp {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'bottom', labels: { color: '#475569', font: {family: 'Inter'} } },
+                    legend: { position: 'bottom', labels: { color: '#475569', font: { family: 'Inter' } } },
                     tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.raw.toFixed(1)}%` } }
                 },
                 animation: { duration: 1000, easing: 'easeOutQuart' }
@@ -175,7 +199,7 @@ class MentalHealthApp {
             const currentData = this.chartInstance.data.datasets[0].data;
             const newData = currentData.map(value => Math.max(0, value + (Math.random() - 0.5) * 2));
             this.chartInstance.data.datasets[0].data = newData;
-            this.chartInstance.update(); 
+            this.chartInstance.update();
         }, 3000);
     }
 
@@ -185,7 +209,7 @@ class MentalHealthApp {
             this.chartUpdateInterval = null;
         }
     }
-    
+
     // --- EXISTING HANDLERS ---
     setupVoiceEngineHandlers() {
         this.voiceEngine.onListeningStart = () => {
@@ -194,14 +218,14 @@ class MentalHealthApp {
         };
         this.voiceEngine.onListeningEnd = () => {
             this.micButton.classList.remove('listening');
-            this.micButton.classList.remove('user-speaking'); 
+            this.micButton.classList.remove('user-speaking');
             this.avatar.setState('THINKING');
         };
         this.voiceEngine.onSpeechResult = (transcript) => this.handleUserInput(transcript, 'speech');
         this.voiceEngine.onSpeechStart = () => this.avatar.setState('SPEAKING');
         this.voiceEngine.onSpeechEnd = () => this.avatar.setState('IDLE');
     }
-    
+
     setupEventListeners() {
         this.micButton.addEventListener('click', async () => {
             if (this.voiceEngine.isListening) { this.voiceEngine.stopListening(); return; }
@@ -227,20 +251,20 @@ class MentalHealthApp {
             e.target.textContent = document.body.classList.contains('privacy-mode') ? '🔒' : '👁️';
         });
     }
-    
+
     async startListening() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.voiceEngine.connectAudioVisualizer(stream, (isSpeaking) => {
                 this.micButton.classList.toggle('user-speaking', isSpeaking);
             });
-            await this.voiceEngine.startListening(); 
+            await this.voiceEngine.startListening();
         } catch (error) {
             console.error(error);
             this.showToast('Microphone access needed.', 'error');
         }
     }
-    
+
     sendTextMessage() {
         const text = this.textInput.value.trim();
         if (text) {
@@ -248,7 +272,7 @@ class MentalHealthApp {
             this.textInput.value = '';
         }
     }
-    
+
     async handleUserInput(userText, source = 'text') {
         this.addMessageToHistory('user', userText);
         if (this.safetyMonitor.checkForCrisis(userText) === 'CRITICAL') {
@@ -270,16 +294,40 @@ class MentalHealthApp {
             this.avatar.setState('IDLE');
         }
     }
-    
+
     async processUserMessage(userText, source) {
-        const prefix = this.userName ? `${this.userName}, ` : "";
-        if (source === 'speech') {
-            return `${prefix}I hear you. You said "${userText}". How does that make you feel?`;
-        } else {
-            return `${prefix}You wrote "${userText}". How does that make you feel?`;
+        if (!this.sessionId) {
+            return "Connection error: No active session. Please refresh.";
+        }
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/conversation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: this.sessionId,
+                    user_message: userText
+                })
+            });
+
+            if (!response.ok) throw new Error('API request failed');
+
+            const data = await response.json();
+
+            // Handle crisis detected by backend
+            if (data.crisis_detected) {
+                document.getElementById('crisis-modal').style.display = 'flex';
+                this.avatar.setState('IDLE');
+            }
+
+            return data.ai_response;
+        } catch (error) {
+            console.error('Error processing message:', error);
+            this.showToast('Error communicating with AI assistant', 'error');
+            return "I'm having trouble connecting right now. Please try again.";
         }
     }
-    
+
     addMessageToHistory(sender, message) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `${sender}-message`;

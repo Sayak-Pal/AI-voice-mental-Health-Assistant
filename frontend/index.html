@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MindVoice - Expert Support</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
     <link rel="stylesheet" href="styles.css">
-    
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
+
 <body>
 
     <div id="toast-container" class="toast-container"></div>
@@ -22,7 +25,7 @@
                 <h1>MindVoice</h1>
             </div>
             <p class="welcome-text">Your safe space to talk.</p>
-            
+
             <div class="input-group">
                 <label>What should I call you?</label>
                 <input type="text" id="username" placeholder="Enter your name..." autocomplete="off">
@@ -46,7 +49,7 @@
     </div>
 
     <div id="app-container" class="app-container blur-content">
-        
+
         <nav class="main-nav" id="main-nav" style="display: none;">
             <button onclick="window.mentalHealthApp.navigateTo('chat-view')" class="nav-btn">Home</button>
             <button onclick="window.mentalHealthApp.navigateTo('stats-view')" class="nav-btn">Community Data</button>
@@ -58,7 +61,7 @@
                     <span class="icon-heart">mV</span>
                     <span class="logo-text">MindVoice</span>
                 </div>
-                
+
                 <div class="header-controls">
                     <button id="privacy-toggle" class="icon-btn" title="Quick Hide">👁️</button>
                     <button id="theme-toggle" class="icon-btn" title="Switch Theme">🌙</button>
@@ -94,17 +97,31 @@
                     <div id="text-input-container" class="glass-input-bar">
                         <input type="text" id="text-input" placeholder="Type your thoughts...">
                         <button id="send-text-button" class="send-btn">
-                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2"
+                                fill="none">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
                         </button>
                     </div>
 
                     <div class="mic-container">
                         <button id="mic-button" class="mic-orb">
                             <div class="mic-icon-wrapper">
-                                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2"
+                                    fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                                </svg>
                             </div>
                             <div class="waveform-visualizer">
-                                <div class="bar bar1"></div><div class="bar bar2"></div><div class="bar bar3"></div><div class="bar bar4"></div><div class="bar bar5"></div>
+                                <div class="bar bar1"></div>
+                                <div class="bar bar2"></div>
+                                <div class="bar bar3"></div>
+                                <div class="bar bar4"></div>
+                                <div class="bar bar5"></div>
                             </div>
                         </button>
                     </div>
@@ -114,10 +131,14 @@
         </section>
 
         <section id="stats-view" class="view-section" style="display: none;">
-            
+
             <div style="position: absolute; top: 20px; left: 20px; z-index: 2001;">
                 <button class="back-arrow-btn" onclick="window.mentalHealthApp.navigateTo('chat-view')">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
                     Back to Home
                 </button>
             </div>
@@ -125,7 +146,7 @@
             <div class="stats-container">
                 <h2 class="stats-header">You Are Not Alone</h2>
                 <p class="stats-sub">Real-time global insights and daily inspiration.</p>
-                
+
                 <div class="chart-wrapper">
                     <canvas id="mentalHealthChart"></canvas>
                 </div>
@@ -146,16 +167,17 @@
                     <a href="tel:988" class="btn-crisis">Call 988</a>
                     <a href="tel:911" class="btn-emergency">Call 911</a>
                 </div>
-                <button onclick="document.getElementById('crisis-modal').style.display='none'" class="btn-close">Close</button>
+                <button onclick="document.getElementById('crisis-modal').style.display='none'"
+                    class="btn-close">Close</button>
             </div>
         </div>
     </div>
 
-    <script src="js/voice-engine.js"></script>
-    <script src="js/avatar.js"></script>
-    <script src="js/safety-monitor.js"></script>
-    <script src="js/state-machine.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/voice-engine.js?v=3"></script>
+    <script src="js/avatar.js?v=3"></script>
+    <script src="js/safety-monitor.js?v=3"></script>
+    <script src="js/state-machine.js?v=3"></script>
+    <script src="js/app.js?v=3"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -166,8 +188,8 @@
             const systemMsg = document.querySelector('.system-message p');
             const genderBtns = document.querySelectorAll('.gender-btn');
             const mainNav = document.getElementById('main-nav');
-            
-            let selectedGender = 'female'; 
+
+            let selectedGender = 'female';
 
             genderBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -177,7 +199,7 @@
                 });
             });
 
-            startBtn.addEventListener('click', () => {
+            startBtn.addEventListener('click', async () => {
                 const name = usernameInput.value.trim();
                 if (!name) {
                     usernameInput.classList.add('input-error');
@@ -185,8 +207,20 @@
                     return;
                 }
 
+                // Disable button during loading
+                startBtn.disabled = true;
+                startBtn.textContent = "Connecting...";
+
                 if (window.mentalHealthApp) {
-                    window.mentalHealthApp.setUserName(name);
+                    // Attempt to start session with backend
+                    const success = await window.mentalHealthApp.startSession(name);
+
+                    if (!success) {
+                        startBtn.disabled = false;
+                        startBtn.textContent = "Start Session";
+                        return;
+                    }
+
                     window.mentalHealthApp.setAssistantGender(selectedGender);
                 }
 
@@ -195,15 +229,15 @@
                     loginOverlay.style.display = 'none';
                     appContainer.classList.remove('blur-content');
                     appContainer.style.opacity = '1';
-                    
+
                     // Show Nav Bar only after login
-                    if(mainNav) mainNav.style.display = 'flex';
+                    if (mainNav) mainNav.style.display = 'flex';
 
                     const welcomeText = `Hello, ${name}. I'm here to listen.`;
-                    if(systemMsg) systemMsg.textContent = welcomeText;
-                    
+                    if (systemMsg) systemMsg.textContent = welcomeText;
+
                     setTimeout(() => {
-                        if(window.mentalHealthApp?.voiceEngine) {
+                        if (window.mentalHealthApp?.voiceEngine) {
                             window.mentalHealthApp.voiceEngine.speak(welcomeText);
                         }
                     }, 800);
@@ -215,4 +249,5 @@
         });
     </script>
 </body>
+
 </html>

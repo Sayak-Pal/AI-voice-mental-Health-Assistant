@@ -1,80 +1,78 @@
 """
 Conversation flow management for mental health screening.
-Handles conversation state transitions and integrates with Gemini API.
+Handles conversation state transitions using deterministic logic derived from botConfig.json.
 """
 
+import json
+import logging
+import os
+import random
 from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
-import logging
 from datetime import datetime
 
-from gemini_client import GeminiClient, ConversationContext
+# We don't need GeminiClient anymore.
 from session_manager import SessionManager, SessionData, ConversationPhase, ScreeningTool
-from safety_monitor import SafetyMonitor
+from safety_monitor import SafetyMonitor, CrisisOverrideHandler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Re-defining ConversationContext locally if needed, though strictly we are using the JSON config now.
+# But existing tests or session manager might rely on these enums if imported?
+# The SessionManager uses ConversationPhase and ScreeningTool.
+# ConversationContext was a Gemini thing. We can likely drop it if we don't use it in internal signatures.
+# However, to be safe and compatible with any other imports I might have missed (though I checked), I'll define a simple one or just skip it if not used.
+# The new logic relies on phases from SessionManager.
+
 class ConversationFlowManager:
     """
     Manages conversation flow and state transitions for mental health screening.
-    Integrates Gemini API responses with session management and safety monitoring.
+    Uses deterministic logic driven by botConfig.json.
     """
     
-    def __init__(self, session_manager: SessionManager, safety_monitor: SafetyMonitor):
+    def __init__(self, session_manager: SessionManager, safety_monitor: SafetyMonitor, config_path: str = "botConfig.json"):
         """Initialize conversation flow manager."""
         self.session_manager = session_manager
         self.safety_monitor = safety_monitor
-        self.gemini_client = GeminiClient()
         
-        # Screening tool question definitions
-        self.screening_questions = self._initialize_screening_questions()
+        # Load configuration
+        self.config = self._load_config(config_path)
         
-        logger.info("Conversation flow manager initialized")
-    
-    def _initialize_screening_questions(self) -> Dict[ScreeningTool, List[Dict]]:
-        """Initialize screening questionnaire definitions."""
-        return {
-            ScreeningTool.PHQ9: [
-                {"id": "phq9_1", "text": "Little interest or pleasure in doing things"},
-                {"id": "phq9_2", "text": "Feeling down, depressed, or hopeless"},
-                {"id": "phq9_3", "text": "Trouble falling or staying asleep, or sleeping too much"},
-                {"id": "phq9_4", "text": "Feeling tired or having little energy"},
-                {"id": "phq9_5", "text": "Poor appetite or overeating"},
-                {"id": "phq9_6", "text": "Feeling bad about yourself — or that you are a failure or have let yourself or your family down"},
-                {"id": "phq9_7", "text": "Trouble concentrating on things, such as reading the newspaper or watching television"},
-                {"id": "phq9_8", "text": "Moving or speaking so slowly that other people could have noticed. Or the opposite — being so fidgety or restless that you have been moving around a lot more than usual"},
-                {"id": "phq9_9", "text": "Thoughts that you would be better off dead, or of hurting yourself"}
-            ],
-            ScreeningTool.GAD7: [
-                {"id": "gad7_1", "text": "Feeling nervous, anxious, or on edge"},
-                {"id": "gad7_2", "text": "Not being able to stop or control worrying"},
-                {"id": "gad7_3", "text": "Worrying too much about different things"},
-                {"id": "gad7_4", "text": "Trouble relaxing"},
-                {"id": "gad7_5", "text": "Being so restless that it is hard to sit still"},
-                {"id": "gad7_6", "text": "Becoming easily annoyed or irritable"},
-                {"id": "gad7_7", "text": "Feeling afraid, as if something awful might happen"}
-            ],
-            ScreeningTool.GHQ12: [
-                {"id": "ghq12_1", "text": "Been able to concentrate on whatever you're doing"},
-                {"id": "ghq12_2", "text": "Lost much sleep over worry"},
-                {"id": "ghq12_3", "text": "Felt that you are playing a useful part in things"},
-                {"id": "ghq12_4", "text": "Felt capable of making decisions about things"},
-                {"id": "ghq12_5", "text": "Felt constantly under strain"},
-                {"id": "ghq12_6", "text": "Felt you couldn't overcome your difficulties"},
-                {"id": "ghq12_7", "text": "Been able to enjoy your normal day-to-day activities"},
-                {"id": "ghq12_8", "text": "Been able to face up to your problems"},
-                {"id": "ghq12_9", "text": "Been feeling unhappy and depressed"},
-                {"id": "ghq12_10", "text": "Been losing confidence in yourself"},
-                {"id": "ghq12_11", "text": "Been thinking of yourself as a worthless person"},
-                {"id": "ghq12_12", "text": "Been feeling reasonably happy, all things considered"}
-            ]
+        # Initialize helpers
+        self.tool_mapping = {
+            "PHQ9": ScreeningTool.PHQ9,
+            "GAD7": ScreeningTool.GAD7,
+            "GHQ12": ScreeningTool.GHQ12
         }
+        
+        logger.info("Conversation flow manager initialized (Strict Deterministic Mode)")
+    
+    def _load_config(self, config_path: str) -> Dict:
+        """Load bot configuration from JSON file"""
+        try:
+            # Try absolute path or relative to backend
+            paths_to_try = [
+                config_path,
+                os.path.join("backend", config_path),
+                os.path.join(os.path.dirname(__file__), config_path)
+            ]
+            
+            for path in paths_to_try:
+                if os.path.exists(path):
+                    with open(path, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+            
+            print(f"Warning: Could not find {config_path}. Using empty config.")
+            return {}
+        except Exception as e:
+            print(f"Error loading config: {e}")
+            return {}
     
     def process_user_message(self, session_id: str, user_message: str) -> Dict[str, Any]:
         """
-        Process user message and generate appropriate AI response based on conversation state.
+        Process user message and generate appropriate response based on conversation state.
         
         Args:
             session_id: Session identifier
@@ -96,13 +94,23 @@ class ConversationFlowManager:
             
             # Check for crisis indicators first
             crisis_response = self.safety_monitor.check_for_crisis(user_message)
-            if crisis_response.should_override:
+            if crisis_response.requires_override: # Note: SafetyMonitor return uses result.requires_override
                 # Handle crisis situation
                 return self._handle_crisis_response(session_id, user_message, crisis_response)
             
             # Process based on current conversation phase
             current_phase = session.current_phase
             
+            # If crisis was previously detected, do not proceed with normal flow unless reset?
+            # User requirement: "Stop everything. Do not continue the questionnaire."
+            if session.crisis_detected:
+                 return {
+                    "ai_response": self.safety_monitor._get_crisis_message(),
+                    "current_phase": ConversationPhase.CRISIS_RESPONSE.value,
+                    "crisis_detected": True,
+                    "next_action": "stop"
+                }
+
             if current_phase == ConversationPhase.GREETING:
                 return self._handle_greeting_phase(session_id, user_message, session)
             elif current_phase == ConversationPhase.TRIAGE:
@@ -110,12 +118,25 @@ class ConversationFlowManager:
             elif current_phase == ConversationPhase.SCREENING:
                 return self._handle_screening_phase(session_id, user_message, session)
             elif current_phase == ConversationPhase.RESULTS:
-                return self._handle_results_phase(session_id, user_message, session)
+                # Results phase usually ends, but if they text again, we might just say bye or restart
+                return {
+                    "ai_response": self.config.get("intro", {}).get("exitResponse", "Take care."),
+                    "current_phase": ConversationPhase.RESULTS.value,
+                    "crisis_detected": False
+                }
+            elif current_phase == ConversationPhase.CRISIS_RESPONSE:
+                 return {
+                    "ai_response": self.safety_monitor._get_crisis_message(),
+                    "current_phase": ConversationPhase.CRISIS_RESPONSE.value,
+                    "crisis_detected": True
+                }
             else:
                 return self._handle_unknown_phase(session_id, user_message, session)
                 
         except Exception as e:
             logger.error(f"Error processing user message: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {
                 "error": f"Failed to process message: {str(e)}",
                 "ai_response": "I'm sorry, I encountered an error. Let's try again.",
@@ -124,50 +145,60 @@ class ConversationFlowManager:
             }
     
     def _handle_greeting_phase(self, session_id: str, user_message: str, session: SessionData) -> Dict[str, Any]:
-        """Handle greeting phase - collect name and move to background check."""
+        """Handle greeting phase."""
         try:
-            # Check if this is the initial greeting or user providing their name
-            if not session.user_name and user_message.strip():
-                # Extract name from user message (simple approach)
-                potential_name = user_message.strip().split()[0] if user_message.strip() else "there"
-                
-                # Update session with user name
-                self.session_manager.update_session(session_id, user_name=potential_name)
-                
-                # Generate response asking about past diagnoses
-                ai_response = self.gemini_client.generate_response(
-                    user_message,
-                    ConversationContext.BACKGROUND_CHECK,
-                    {"user_name": potential_name}
-                )
-                
-                # Move to triage phase (skipping detailed background for now)
-                self.session_manager.update_session(session_id, current_phase=ConversationPhase.TRIAGE.value)
-                
-                # Add to conversation history
-                self.session_manager.add_conversation(session_id, user_message, ai_response, ConversationPhase.TRIAGE.value)
-                
-                return {
-                    "ai_response": ai_response,
-                    "current_phase": ConversationPhase.TRIAGE.value,
-                    "crisis_detected": False,
-                    "next_action": "triage_question"
-                }
-            else:
-                # Initial greeting
-                ai_response = self.gemini_client.generate_response(
-                    user_message,
-                    ConversationContext.GREETING
-                )
-                
-                # Add to conversation history
+            intro_config = self.config.get("intro", {})
+            welcome_msg = intro_config.get("welcome", "")
+            
+            # If this is the very first interaction (empty history), send welcome
+            # Or if the last message from agent wasn't the welcome message?
+            # Simple check: if NO history, it's start.
+            if not session.conversation_history:
+                ai_response = welcome_msg
                 self.session_manager.add_conversation(session_id, user_message, ai_response, ConversationPhase.GREETING.value)
-                
                 return {
                     "ai_response": ai_response,
                     "current_phase": ConversationPhase.GREETING.value,
                     "crisis_detected": False,
-                    "next_action": "collect_name"
+                    "next_action": "wait_for_intro_response"
+                }
+
+            # If user responded to welcome
+            user_text_lower = user_message.lower().strip()
+            
+            # Check for YES
+            if any(k in user_text_lower for k in intro_config.get("yesKeywords", [])):
+                # Move to Mood Selection
+                mood_prompt = self.config.get("moodSelection", {}).get("prompt", "")
+                self.session_manager.update_session(session_id, current_phase=ConversationPhase.TRIAGE.value)
+                self.session_manager.add_conversation(session_id, user_message, mood_prompt, ConversationPhase.TRIAGE.value)
+                return {
+                    "ai_response": mood_prompt,
+                    "current_phase": ConversationPhase.TRIAGE.value,
+                    "crisis_detected": False,
+                    "next_action": "get_mood"
+                }
+            
+            # Check for NO
+            elif any(k in user_text_lower for k in intro_config.get("noKeywords", [])):
+                exit_msg = intro_config.get("exitResponse", "")
+                self.session_manager.add_conversation(session_id, user_message, exit_msg, ConversationPhase.GREETING.value)
+                return {
+                    "ai_response": exit_msg,
+                    "current_phase": ConversationPhase.GREETING.value,
+                    "crisis_detected": False,
+                    "completed": True
+                }
+            
+            # Unclear response
+            else:
+                retry_msg = "I didn't quite catch that. Would you like to continue? Please say 'yes' or 'no'."
+                # Don't add to history to keep it clean? Or do add? Let's add.
+                self.session_manager.add_conversation(session_id, user_message, retry_msg, ConversationPhase.GREETING.value)
+                return {
+                    "ai_response": retry_msg,
+                    "current_phase": ConversationPhase.GREETING.value,
+                    "crisis_detected": False
                 }
                 
         except Exception as e:
@@ -175,45 +206,57 @@ class ConversationFlowManager:
             return self._get_error_response(session, str(e))
     
     def _handle_triage_phase(self, session_id: str, user_message: str, session: SessionData) -> Dict[str, Any]:
-        """Handle triage phase - determine screening tool based on primary concern."""
+        """Handle mood selection and routing."""
         try:
-            # Analyze user response to determine screening tool
-            screening_tool = self._determine_screening_tool(user_message)
+            user_text_lower = user_message.lower()
+            routing = self.config.get("moodSelection", {}).get("routing", {})
             
-            # Update session with selected tool and move to screening phase
+            selected_tool_name = None
+            
+            # Check keywords
+            for tool_name, keywords in routing.items():
+                if any(k in user_text_lower for k in keywords):
+                    selected_tool_name = tool_name
+                    break
+            
+            if not selected_tool_name:
+                retry_msg = "Could you tell me if you are feeling more sad, anxious, or just generally stressed?"
+                self.session_manager.add_conversation(session_id, user_message, retry_msg, ConversationPhase.TRIAGE.value)
+                return {
+                    "ai_response": retry_msg,
+                    "current_phase": ConversationPhase.TRIAGE.value,
+                    "crisis_detected": False
+                }
+                
+            # Valid tool selected
+            tool_enum = self.tool_mapping.get(selected_tool_name)
+            if not tool_enum:
+                # Default safety
+                tool_enum = ScreeningTool.GHQ12
+                selected_tool_name = "GHQ12"
+            
+            # Update session
             self.session_manager.update_session(
                 session_id, 
-                selected_tool=screening_tool.value,
-                current_phase=ConversationPhase.SCREENING.value
+                selected_tool=tool_enum.value,
+                current_phase=ConversationPhase.SCREENING.value,
+                responses={} # Clear any old responses if any
             )
             
-            # Generate first screening question
-            first_question = self.screening_questions[screening_tool][0]
+            # Get first question
+            questions = self.config.get("questionnaires", {}).get(selected_tool_name, {}).get("questions", [])
+            first_q = questions[0]
             
-            # Get appropriate conversation context
-            if screening_tool == ScreeningTool.PHQ9:
-                context = ConversationContext.PHQ9_SCREENING
-            elif screening_tool == ScreeningTool.GAD7:
-                context = ConversationContext.GAD7_SCREENING
-            else:
-                context = ConversationContext.GHQ12_SCREENING
+            transition_msg = f"I understand. Let's talk a bit more about that. {first_q}"
             
-            ai_response = self.gemini_client.generate_response(
-                first_question["text"],
-                context,
-                {"user_name": session.user_name, "question_number": 1}
-            )
-            
-            # Add to conversation history
-            self.session_manager.add_conversation(session_id, user_message, ai_response, ConversationPhase.SCREENING.value)
+            self.session_manager.add_conversation(session_id, user_message, transition_msg, ConversationPhase.SCREENING.value)
             
             return {
-                "ai_response": ai_response,
+                "ai_response": transition_msg,
                 "current_phase": ConversationPhase.SCREENING.value,
                 "crisis_detected": False,
-                "selected_tool": screening_tool.value,
-                "question_number": 1,
-                "next_action": "screening_question"
+                "selected_tool": tool_enum.value,
+                "question_number": 1
             }
             
         except Exception as e:
@@ -221,351 +264,233 @@ class ConversationFlowManager:
             return self._get_error_response(session, str(e))
     
     def _handle_screening_phase(self, session_id: str, user_message: str, session: SessionData) -> Dict[str, Any]:
-        """Handle screening phase - process responses and ask next questions."""
+        """Handle screening questions."""
         try:
             if not session.selected_tool:
-                return self._get_error_response(session, "No screening tool selected")
+                # This shouldn't happen if flow is correct, but safe recovery
+                return self._handle_unknown_phase(session_id, user_message, session)
             
-            screening_tool = session.selected_tool
-            questions = self.screening_questions[screening_tool]
-            current_question_index = len(session.responses)
+            tool_name = session.selected_tool.name # Enum name e.g. PHQ9
+            # Check if name is consistent with config keys
+            if tool_name not in self.config.get("questionnaires", {}):
+                 # Try value
+                 # SessionTool.PHQ9 value is "PHQ-9" maybe? Check definition?
+                 # Assuming keys in config "PHQ9", "GAD7" match what we mapped in tool_mapping
+                 pass
             
-            if current_question_index >= len(questions):
-                # All questions answered, move to results
-                return self._transition_to_results(session_id, user_message, session)
+            # Actually, SessionTool enum members: PHQ9, GAD7, GHQ12.
+            # session.selected_tool is an Enum member. .name is "PHQ9".
             
-            # Process current response
-            current_question = questions[current_question_index - 1] if current_question_index > 0 else questions[0]
+            questions = self.config.get("questionnaires", {}).get(tool_name, {}).get("questions", [])
             
-            if current_question_index > 0:
-                # Map user response to score
-                score, explanation = self.gemini_client.map_response_to_score(
-                    user_message,
-                    current_question["text"],
-                    screening_tool
-                )
-                
-                # Check for PHQ-9 Question 9 (suicidal ideation)
-                if screening_tool == ScreeningTool.PHQ9 and current_question["id"] == "phq9_9" and score > 0:
-                    # Trigger crisis response for positive PHQ-9 Q9
-                    return self._handle_phq9_q9_crisis(session_id, user_message, session, score)
-                
-                # Add response to session
-                self.session_manager.add_response(
-                    session_id,
-                    current_question["id"],
-                    user_message,
-                    score
-                )
+            # How many answered so far?
+            # session.responses is a Dict[qid, score]
+            current_idx = len(session.responses)
             
-            # Check if there are more questions
-            if current_question_index < len(questions):
-                next_question = questions[current_question_index]
-                
-                # Get appropriate conversation context
-                if screening_tool == ScreeningTool.PHQ9:
-                    context = ConversationContext.PHQ9_SCREENING
-                elif screening_tool == ScreeningTool.GAD7:
-                    context = ConversationContext.GAD7_SCREENING
-                else:
-                    context = ConversationContext.GHQ12_SCREENING
-                
-                ai_response = self.gemini_client.generate_response(
-                    next_question["text"],
-                    context,
-                    {
-                        "user_name": session.user_name,
-                        "question_number": current_question_index + 1
-                    }
-                )
-                
-                # Add to conversation history
-                self.session_manager.add_conversation(session_id, user_message, ai_response, ConversationPhase.SCREENING.value)
-                
+            # Scoring the PREVIOUS question (because we are in the handler for the USER'S answer)
+            score = self._map_response_to_score(user_message, tool_name)
+            
+            if score == -1:
+                # Clarify
+                clarify_msg = self.config.get("answerMapping", {}).get("clarifyPrompt", "Could you clarify?")
+                self.session_manager.add_conversation(session_id, user_message, clarify_msg, ConversationPhase.SCREENING.value)
                 return {
-                    "ai_response": ai_response,
+                    "ai_response": clarify_msg,
+                    "current_phase": ConversationPhase.SCREENING.value,
+                    "crisis_detected": False
+                }
+            
+            # Check PHQ9 Q9 crisis
+            # Config has "crisisQuestionIndex": 8 (0-indexed) -> 9th question
+            crisis_idx = self.config.get("questionnaires", {}).get(tool_name, {}).get("crisisQuestionIndex")
+            
+            # note: current_idx corresponds to the index of the question just answered.
+            # If 0 questions answered before this, we just answered question index 0.
+            # So we check if current_idx == crisis_idx?
+            # EX: crisis_idx = 8.
+            # If we answer 9th question (index 8), we are at state where responses has 0..7 items? No.
+            # Wait.
+            # Logic:
+            # 1. Ask Q1 (index 0).
+            # 2. User answers Q1.
+            # 3. Handler called. len(responses) is 0.
+            # 4. We score user answer.
+            # 5. We check if index 0 is crisis index.
+            # 6. We save response. len(responses) becomes 1.
+            
+            # So verifying crisis check:
+            if tool_name == "PHQ9" and crisis_idx is not None and current_idx == crisis_idx:
+                if score > 0:
+                    return self._handle_phq9_q9_crisis(session_id, user_message, session, score)
+
+            # Save response
+            qid = f"{tool_name.lower()}_{current_idx + 1}"
+            self.session_manager.add_response(session_id, qid, user_message, score)
+            
+            # Determine NEXT question
+            next_idx = current_idx + 1
+            if next_idx < len(questions):
+                next_q = questions[next_idx]
+                self.session_manager.add_conversation(session_id, user_message, next_q, ConversationPhase.SCREENING.value)
+                return {
+                    "ai_response": next_q,
                     "current_phase": ConversationPhase.SCREENING.value,
                     "crisis_detected": False,
-                    "selected_tool": screening_tool.value,
-                    "question_number": current_question_index + 1,
-                    "next_action": "screening_question"
+                    "question_number": next_idx + 1
                 }
             else:
-                # All questions completed, transition to results
+                # All done -> Results
                 return self._transition_to_results(session_id, user_message, session)
-                
+
         except Exception as e:
             logger.error(f"Error in screening phase: {str(e)}")
             return self._get_error_response(session, str(e))
-    
-    def _handle_results_phase(self, session_id: str, user_message: str, session: SessionData) -> Dict[str, Any]:
-        """Handle results phase - provide screening results and recommendations."""
+
+    def _map_response_to_score(self, user_text: str, tool_name: str) -> int:
+        """Map answer to score based on config scales."""
+        text = user_text.lower()
+        
+        # Determine strict scale to use
+        mapping_config = self.config.get("answerMapping", {})
+        scale = mapping_config.get("standardScale")
+        if tool_name == "GHQ12":
+            scale = mapping_config.get("ghqScale")
+            
+        # Iterate 3 down to 0
+        for score_val in ["3", "2", "1", "0"]:
+            keywords = scale.get(score_val, [])
+            if any(k in text for k in keywords):
+                return int(score_val)
+        
+        return -1 # Unclear
+
+    def _transition_to_results(self, session_id: str, user_message: str, session: SessionData) -> Dict[str, Any]:
+        """Calculate score and show results."""
         try:
-            # Calculate total score
+            # Update phase
+            self.session_manager.update_session(session_id, current_phase=ConversationPhase.RESULTS.value, completed=True)
+            
+            # Calculate total
             total_score = session.get_total_score()
             
-            # Determine severity level
-            severity_level = self._calculate_severity_level(session.selected_tool, total_score)
+            # Determine logic
+            tool_name = session.selected_tool.name
             
-            # Generate results explanation
-            ai_response = self.gemini_client.generate_response(
-                f"Total score: {total_score}, Severity: {severity_level}",
-                ConversationContext.RESULTS_EXPLANATION,
-                {
-                    "user_name": session.user_name,
-                    "screening_tool": session.selected_tool.value,
-                    "total_score": total_score,
-                    "severity_level": severity_level
-                }
-            )
+            thresholds = self.config.get("questionnaires", {}).get(tool_name, {}).get("thresholds", {})
             
-            # Mark session as completed
-            self.session_manager.update_session(session_id, completed=True)
+            # Find severity
+            severity = "minimal" # default
+            # thresholds format: "minimal": [0, 4]
+            # iterate and check range
+            for sev_name, range_val in thresholds.items():
+                if range_val[0] <= total_score <= range_val[1]:
+                    severity = sev_name
+                    break
+             
+            # Map GHQ "normal" to "minimal" key if needed
+            if severity == "normal":
+                severity = "minimal"
             
-            # Add to conversation history
-            self.session_manager.add_conversation(session_id, user_message, ai_response, ConversationPhase.RESULTS.value)
+            result_config = self.config.get("results", {}).get(severity, {})
+            if not result_config:
+                 # Fallback if severity key not found (e.g. moderately_severe) -> map to severe?
+                 if severity == "moderately_severe":
+                     result_config = self.config.get("results", {}).get("severe", {})
+                     severity = "severe" # update for clarity
+                 else:
+                     # Default to moderate if unknown
+                     result_config = self.config.get("results", {}).get("moderate", {})
+
+            msg = result_config.get("message", "")
+            suggestions = result_config.get("suggestions", [])
+            
+            # Pick a suggestion
+            sugg_text = ""
+            if suggestions:
+                sugg_text = "\n\nSuggestion: " + random.choice(suggestions)
+            
+            full_response = f"{msg}{sugg_text}"
+            
+            self.session_manager.add_conversation(session_id, user_message, full_response, ConversationPhase.RESULTS.value)
             
             return {
-                "ai_response": ai_response,
+                "ai_response": full_response,
                 "current_phase": ConversationPhase.RESULTS.value,
                 "crisis_detected": False,
                 "total_score": total_score,
-                "severity_level": severity_level,
-                "screening_tool": session.selected_tool.value,
-                "completed": True,
-                "next_action": "screening_complete"
+                "severity_level": severity,
+                "completed": True
             }
             
         except Exception as e:
-            logger.error(f"Error in results phase: {str(e)}")
+            logger.error(f"Error results phase: {str(e)}")
             return self._get_error_response(session, str(e))
-    
-    def _handle_unknown_phase(self, session_id: str, user_message: str, session: SessionData) -> Dict[str, Any]:
-        """Handle unknown or invalid conversation phase."""
-        logger.warning(f"Unknown conversation phase: {session.current_phase}")
-        
-        # Reset to greeting phase
-        self.session_manager.update_session(session_id, current_phase=ConversationPhase.GREETING.value)
-        
-        ai_response = "I'm sorry, something went wrong. Let's start over. What would you like me to call you?"
-        
-        return {
-            "ai_response": ai_response,
-            "current_phase": ConversationPhase.GREETING.value,
-            "crisis_detected": False,
-            "next_action": "restart"
-        }
-    
+
     def _handle_crisis_response(self, session_id: str, user_message: str, crisis_response) -> Dict[str, Any]:
         """Handle crisis situation with immediate intervention."""
         try:
-            # Update session with crisis detection
             self.session_manager.update_session(
                 session_id,
                 crisis_detected=True,
                 current_phase=ConversationPhase.CRISIS_RESPONSE.value
             )
             
-            # Generate crisis response message
-            crisis_message = crisis_response.message or "I'm concerned about what you've shared. Please reach out for immediate support."
+            crisis_message = crisis_response.message
             
-            # Add to conversation history
             self.session_manager.add_conversation(session_id, user_message, crisis_message, ConversationPhase.CRISIS_RESPONSE.value)
             
             return {
                 "ai_response": crisis_message,
                 "current_phase": ConversationPhase.CRISIS_RESPONSE.value,
                 "crisis_detected": True,
-                "crisis_level": crisis_response.level.value,
-                "next_action": "crisis_intervention"
+                "next_action": "stop"
             }
-            
         except Exception as e:
-            logger.error(f"Error handling crisis response: {str(e)}")
-            return {
-                "ai_response": "I'm concerned about your safety. Please contact emergency services or a crisis helpline immediately.",
-                "current_phase": ConversationPhase.CRISIS_RESPONSE.value,
-                "crisis_detected": True,
-                "error": str(e)
-            }
-    
+            logger.error(f"Error handling crisis: {str(e)}")
+            return {"error": str(e)}
+
     def _handle_phq9_q9_crisis(self, session_id: str, user_message: str, session: SessionData, score: int) -> Dict[str, Any]:
-        """Handle PHQ-9 Question 9 positive response (suicidal ideation)."""
+        """Handle PHQ-9 Q9 crisis trigger."""
         try:
-            # Update session with crisis detection
             self.session_manager.update_session(
                 session_id,
                 crisis_detected=True,
                 current_phase=ConversationPhase.CRISIS_RESPONSE.value
             )
             
-            # Add the response first
-            self.session_manager.add_response(
-                session_id,
-                "phq9_9",
-                user_message,
-                score
-            )
+            # Save the response
+            self.session_manager.add_response(session_id, "phq9_9", user_message, score)
             
-            crisis_message = ("I'm very concerned about what you've shared regarding thoughts of hurting yourself. "
-                            "Your safety is the most important thing right now. Please reach out for immediate support. "
-                            "If you're in the US, you can call 988 for the Suicide & Crisis Lifeline, "
-                            "or contact emergency services at 911 if you're in immediate danger.")
-            
-            # Add to conversation history
+            crisis_message = self.safety_monitor._get_crisis_message()
             self.session_manager.add_conversation(session_id, user_message, crisis_message, ConversationPhase.CRISIS_RESPONSE.value)
             
             return {
                 "ai_response": crisis_message,
                 "current_phase": ConversationPhase.CRISIS_RESPONSE.value,
                 "crisis_detected": True,
-                "crisis_trigger": "PHQ9_Q9",
-                "next_action": "crisis_intervention"
+                "crisis_trigger": "PHQ9_Q9"
             }
-            
         except Exception as e:
-            logger.error(f"Error handling PHQ-9 Q9 crisis: {str(e)}")
-            return {
-                "ai_response": "I'm very concerned about your safety. Please contact emergency services immediately.",
-                "current_phase": ConversationPhase.CRISIS_RESPONSE.value,
-                "crisis_detected": True,
-                "error": str(e)
-            }
-    
-    def _determine_screening_tool(self, user_message: str) -> ScreeningTool:
-        """Determine appropriate screening tool based on user's primary concern."""
-        message_lower = user_message.lower()
-        
-        # Keywords for different screening tools
-        depression_keywords = ['sad', 'depressed', 'depression', 'down', 'hopeless', 'empty', 'worthless']
-        anxiety_keywords = ['anxious', 'anxiety', 'worried', 'worry', 'nervous', 'panic', 'fear']
-        
-        # Count keyword matches
-        depression_score = sum(1 for keyword in depression_keywords if keyword in message_lower)
-        anxiety_score = sum(1 for keyword in anxiety_keywords if keyword in message_lower)
-        
-        # Determine screening tool
-        if depression_score > anxiety_score:
-            return ScreeningTool.PHQ9
-        elif anxiety_score > depression_score:
-            return ScreeningTool.GAD7
-        else:
-            # Default to general mental health screening
-            return ScreeningTool.GHQ12
-    
-    def _calculate_severity_level(self, screening_tool: ScreeningTool, total_score: int) -> str:
-        """Calculate severity level based on screening tool and total score."""
-        if screening_tool == ScreeningTool.PHQ9:
-            if total_score <= 4:
-                return "minimal"
-            elif total_score <= 9:
-                return "mild"
-            elif total_score <= 14:
-                return "moderate"
-            elif total_score <= 19:
-                return "moderately_severe"
-            else:
-                return "severe"
-        elif screening_tool == ScreeningTool.GAD7:
-            if total_score <= 4:
-                return "minimal"
-            elif total_score <= 9:
-                return "mild"
-            elif total_score <= 14:
-                return "moderate"
-            else:
-                return "severe"
-        else:  # GHQ12
-            if total_score <= 11:
-                return "minimal"
-            elif total_score <= 15:
-                return "mild"
-            elif total_score <= 20:
-                return "moderate"
-            else:
-                return "severe"
-    
-    def _transition_to_results(self, session_id: str, user_message: str, session: SessionData) -> Dict[str, Any]:
-        """Transition from screening to results phase."""
-        try:
-            # Process the final response if there is one
-            if user_message.strip():
-                questions = self.screening_questions[session.selected_tool]
-                current_question_index = len(session.responses)
-                
-                if current_question_index < len(questions):
-                    current_question = questions[current_question_index]
-                    
-                    # Map final response to score
-                    score, explanation = self.gemini_client.map_response_to_score(
-                        user_message,
-                        current_question["text"],
-                        session.selected_tool
-                    )
-                    
-                    # Add final response to session
-                    self.session_manager.add_response(
-                        session_id,
-                        current_question["id"],
-                        user_message,
-                        score
-                    )
-            
-            # Update session phase to results
-            self.session_manager.update_session(session_id, current_phase=ConversationPhase.RESULTS.value)
-            
-            # Calculate results
-            total_score = session.get_total_score()
-            severity_level = self._calculate_severity_level(session.selected_tool, total_score)
-            
-            # Generate results explanation
-            ai_response = self.gemini_client.generate_response(
-                f"Screening completed. Total score: {total_score}, Severity: {severity_level}",
-                ConversationContext.RESULTS_EXPLANATION,
-                {
-                    "user_name": session.user_name,
-                    "screening_tool": session.selected_tool.value,
-                    "total_score": total_score,
-                    "severity_level": severity_level
-                }
-            )
-            
-            # Mark session as completed
-            self.session_manager.update_session(session_id, completed=True)
-            
-            # Add to conversation history
-            self.session_manager.add_conversation(session_id, user_message, ai_response, ConversationPhase.RESULTS.value)
-            
-            return {
-                "ai_response": ai_response,
-                "current_phase": ConversationPhase.RESULTS.value,
-                "crisis_detected": False,
-                "total_score": total_score,
-                "severity_level": severity_level,
-                "screening_tool": session.selected_tool.value,
-                "completed": True,
-                "next_action": "screening_complete"
-            }
-            
-        except Exception as e:
-            logger.error(f"Error transitioning to results: {str(e)}")
-            return self._get_error_response(session, str(e))
-    
+             return {"error": str(e)}
+
+    def _handle_unknown_phase(self, session_id: str, user_message: str, session: SessionData) -> Dict[str, Any]:
+        """Handle unknown phase."""
+        self.session_manager.update_session(session_id, current_phase=ConversationPhase.GREETING.value)
+        msg = "Let's start over. " + self.config.get("intro", {}).get("welcome", "")
+        self.session_manager.add_conversation(session_id, user_message, msg, ConversationPhase.GREETING.value)
+        return {
+            "ai_response": msg,
+            "current_phase": ConversationPhase.GREETING.value,
+            "crisis_detected": False
+        }
+
     def _get_error_response(self, session: SessionData, error_message: str) -> Dict[str, Any]:
-        """Generate error response."""
         return {
             "error": error_message,
-            "ai_response": "I'm sorry, I encountered an error. Let's try again or start over.",
+            "ai_response": "I'm sorry, I encountered an error. Let's try again.",
             "current_phase": session.current_phase.value if session else None,
             "crisis_detected": False
         }
-    
-    def get_conversation_history(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
-        """Get conversation history for a session."""
-        session = self.session_manager.get_session(session_id)
-        if session:
-            return session.conversation_history
-        return None
     
     def get_session_summary(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get summary of session progress and state."""
@@ -582,6 +507,10 @@ class ConversationFlowManager:
             "total_score": session.get_total_score(),
             "crisis_detected": session.crisis_detected,
             "completed": session.completed,
-            "start_time": session.start_time.isoformat(),
-            "last_activity": session.last_activity.isoformat()
         }
+    
+    def get_conversation_history(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
+        session = self.session_manager.get_session(session_id)
+        if session:
+            return session.conversation_history
+        return None
