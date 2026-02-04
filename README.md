@@ -1,182 +1,124 @@
-# Voice-Based AI Mental Health Screening Assistant
+# AI Voice Mental Health Assistant 🤖🧠
 
-A web application that provides accessible mental health screening through conversational AI, featuring voice interaction with an animated avatar and standardized screening questionnaires (PHQ-9, GAD-7, GHQ-12).
+A voice-enabled assistant designed to provide empathetic support, mental health resources, and simple CBT-style exercises. This repository contains a full-stack prototype (frontend + backend) demonstrating conversational voice interactions, sentiment-aware responses, and resource linking for users seeking mental health support.
 
-## Features
+Owner: Sayak Pal
 
-- **Voice Interaction**: Web Speech API integration for natural conversation
-- **Visual Feedback**: Animated avatar with state-based animations
-- **Safety First**: Real-time crisis detection and emergency resource display
-- **Standardized Screening**: PHQ-9, GAD-7, and GHQ-12 questionnaires
-- **Privacy Focused**: Session-only data storage, no persistent logging
-- **Browser Compatible**: Graceful fallbacks for unsupported features
+Badges
+- ✅ Prototype
+- 🧪 Manual testing included (see CHECKPOINT_7_MANUAL_TESTING_GUIDE.md)
 
-## Project Structure
+Table of Contents
+- About
+- Features
+- Quick Start
+- Usage Examples
+- Project Structure
+- Contributing
+- Future Plans
+- License
 
-```
-├── backend/                 # Python FastAPI backend
-│   ├── app.py              # Main FastAPI application
-│   ├── config.py           # Configuration management
-│   ├── requirements.txt    # Python dependencies
-│   └── .env.example        # Environment variables template
-├── frontend/               # Frontend web application
-│   ├── index.html          # Main HTML structure
-│   ├── styles.css          # CSS styling
-│   ├── js/                 # JavaScript modules
-│   │   ├── app.js          # Main application controller
-│   │   ├── voice-engine.js # Web Speech API integration
-│   │   ├── avatar.js       # Avatar component
-│   │   ├── safety-monitor.js # Crisis detection
-│   │   └── state-machine.js # State management
-│   └── assets/             # Static assets
-│       └── animations/     # Avatar animation videos
-└── README.md               # This file
-```
+About
+------
 
-## Setup Instructions
+This project aims to create an accessible voice-first mental health assistant that listens, reflects, and guides users to helpful resources. It is not a replacement for professional mental health care. If someone is in crisis, please contact local emergency services or a crisis hotline.
 
-### Backend Setup
+Features
+--------
 
-1. **Create Python Virtual Environment**
+- Voice input and output (microphone + text-to-speech) 🎤🔊
+- Sentiment and intent detection (basic sentiment analysis) ❤️‍🩹
+- Conversational, empathetic responses with grounding and breathing prompts 🧘‍♂️
+- Resource linking (hotlines, articles, nearby services) 🔗
+- Modular frontend and backend for easy experimentation 🧩
+
+Quick Start
+-----------
+
+1. Clone the repo:
+
    ```bash
-   cd backend
+   git clone https://github.com/Sayak-Pal/AI-voice-mental-Health-Assistant.git
+   cd AI-voice-mental-Health-Assistant
+   ```
+
+2. Backend (Python)
+
+   - See `backend/` for the server implementation. There may be a `setup.py` for installing dependencies.
+   - Create a virtual environment, install dependencies, and run the server:
+
+   ```bash
    python -m venv venv
-   
-   # Windows
-   venv\\Scripts\\activate
-   
-   # macOS/Linux
-   source venv/bin/activate
+   source venv/bin/activate  # macOS/Linux
+   venv\Scripts\activate   # Windows
+   pip install -r backend/requirements.txt  # if present
+   python backend/app.py  # or the main backend entrypoint
    ```
 
-2. **Install Dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+3. Frontend
 
-3. **Configure Environment Variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env file with your configuration:
-   # - Add your Gemini API key
-   # - Configure crisis helpline numbers for your region
-   # - Adjust other settings as needed
-   ```
+   - See `frontend/` for the UI client. Run the development server (example for React/Vue):
 
-4. **Run Backend Server**
-   ```bash
-   python app.py
-   ```
-   Server will start at `http://localhost:8000`
-
-### Frontend Setup
-
-1. **Serve Frontend Files**
-   The frontend is a static web application. You can serve it using:
-   
-   **Option 1: Python HTTP Server**
    ```bash
    cd frontend
-   python -m http.server 3000
+   npm install
+   npm start
    ```
-   
-   **Option 2: Node.js HTTP Server**
-   ```bash
-   cd frontend
-   npx http-server -p 3000
-   ```
-   
-   **Option 3: Any web server of your choice**
 
-2. **Access Application**
-   Open `http://localhost:3000` in your web browser
+Usage Examples
+--------------
 
-### Avatar Animations (Optional)
+- Start the app, allow microphone access, and say:
+  - "I'm feeling anxious today." → Assistant responds with empathetic reflection and a breathing exercise.
+  - "I can't sleep." → Assistant offers grounding techniques and links to sleep hygiene resources.
+  - "I feel hopeless." → Assistant provides supportive language and emergency resources if needed.
 
-To enable avatar animations, add video files to `frontend/assets/animations/`:
-- `idle.mp4` - Default idle animation
-- `listening.mp4` - Animation when listening to user
-- `speaking.mp4` - Animation when system is speaking
-- `thinking.mp4` - Animation when processing user input
+- Example API call (backend):
 
-If animation files are not available, the system will use a CSS-based fallback avatar.
+```json
+POST /api/v1/respond
+Content-Type: application/json
 
-## Environment Configuration
+{ "text": "I'm really stressed about work" }
+```
 
-### Required Environment Variables
+Example response:
 
-- `GEMINI_API_KEY`: Your Google Gemini API key for conversational AI
-- `CRISIS_HELPLINE_US`: Crisis helpline number (default: 988)
-- `EMERGENCY_SERVICES`: Emergency services number (default: 911)
+```json
+{ "reply": "I'm sorry you're feeling stressed. Take a slow breath with me... (guided breathing)" }
+```
 
-### Optional Environment Variables
+Project Structure
+-----------------
 
-- `HOST`: Server host (default: 0.0.0.0)
-- `PORT`: Server port (default: 8000)
-- `DEBUG`: Enable debug mode (default: True)
-- `SESSION_TIMEOUT_MINUTES`: Session timeout (default: 30)
-- `ENABLE_CRISIS_DETECTION`: Enable crisis detection (default: True)
-- `CRISIS_TRIGGER_WORDS`: Comma-separated crisis trigger words
+- backend/ — Python server, APIs, NLP modules
+- frontend/ — UI client, voice capture, TTS
+- CHECKPOINT_7_MANUAL_TESTING_GUIDE.md — Manual testing instructions
+- CHECKPOINT_7_SUMMARY.md — Project summary and checkpoint notes
+- setup.py — Installer / packaging helper
 
-## Browser Compatibility
+Contributing
+------------
 
-### Supported Features
-- **Chrome/Edge**: Full voice and synthesis support
-- **Firefox**: Full voice and synthesis support
-- **Safari**: Limited voice support, full synthesis
-- **Mobile browsers**: Varies by platform
+Contributions are welcome. Please open issues or pull requests. Some ideas:
+- Improve sentiment detection accuracy
+- Add more languages for TTS and STT
+- Integrate with verified crisis hotlines per country
 
-### Fallback Options
-- Text input when voice recognition fails
-- CSS-based avatar when video animations unavailable
-- Graceful degradation for unsupported browsers
+Future Plans 🚀
 
-## Safety and Ethics
+- Improve NLP: intent classification, context tracking, memory for longer conversations 🧠
+- Privacy-first features: on-device processing, encrypted logs 🔒
+- Multi-lingual support and accessibility improvements 🌍
+- Mobile app editions (iOS/Android) with offline capabilities 📱
+- Integrations with certified providers and emergency escalation pathways (with strict consent flows)
 
-### Crisis Detection
-- Real-time monitoring for suicide/self-harm indicators
-- Immediate intervention with emergency resources
-- PHQ-9 Question 9 special handling for suicidal ideation
+Ethics & Safety
+---------------
 
-### Privacy Protection
-- No persistent data storage
-- Session-only conversation memory
-- No third-party tracking by default
-- Automatic data cleanup on session end
+This project is experimental. It is not a medical device. Do not rely on it for urgent crisis situations. Include clear disclaimers in UI and docs.
 
-### Non-Diagnostic Nature
-- Clear disclaimers throughout interface
-- No medical diagnoses provided
-- Professional referral recommendations
-- Emphasis on screening vs. diagnosis
+License
+-------
 
-## Development Notes
-
-This is the initial project structure setup. The system includes:
-
-✅ **Completed:**
-- Project directory structure
-- Basic HTML interface with Web Speech API detection
-- Python FastAPI backend foundation
-- Environment configuration system
-- JavaScript component architecture
-- CSS styling with calming design
-- Browser compatibility detection
-- Crisis detection framework
-
-🚧 **Next Steps:**
-- Implement crisis detection and safety layer
-- Build voice engine and Web Speech API integration
-- Create avatar component and state management
-- Develop backend API endpoints
-- Integrate Gemini API for conversational intelligence
-
-## License
-
-This project is designed for educational and research purposes in mental health technology. Please ensure compliance with healthcare regulations and ethical guidelines in your jurisdiction before deployment.
-
-## Support
-
-For technical issues or questions about the mental health screening assistant, please refer to the project documentation or contact the development team.
-
-**Important:** This is not a diagnostic tool. For professional mental health support, please consult a qualified healthcare provider.
+This project is licensed under the MIT License. See LICENSE for details.
